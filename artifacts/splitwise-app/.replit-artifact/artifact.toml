@@ -1,6 +1,6 @@
 kind = "mobile"
 previewPath = "/"
-title = "SplitEase - Expense Splitter"
+title = "Hisab Kitab"
 version = "1.0.0"
 id = "artifacts/splitwise-app"
 router = "expo-domain"
@@ -16,7 +16,7 @@ paths = [ "/" ]
 localPort = 24032
 
 [services.development]
-run = "pnpm --filter @workspace/splitwise-app run dev"
+run = "PORT=24032 pnpm --filter @workspace/splitwise-app run dev"
 
 [services.production]
 build = [ "pnpm", "--filter", "@workspace/splitwise-app", "run", "build" ]
