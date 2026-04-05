@@ -1,5 +1,4 @@
 import { Feather } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -9,18 +8,42 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useColors } from "@/hooks/useColors";
+import Avatar from "@/components/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useData } from "@/context/DataContext";
-import Input from "@/components/Input";
-import Button from "@/components/Button";
-import Avatar from "@/components/Avatar";
-import { CURRENCIES, GROUP_CATEGORIES, GroupCategory, User } from "@/types";
+import { useColors } from "@/hooks/useColors";
+
+const CURRENCIES = [
+  { code: "INR", symbol: "₹", name: "Indian Rupee" },
+  { code: "USD", symbol: "$", name: "US Dollar" },
+  { code: "EUR", symbol: "€", name: "Euro" },
+  { code: "GBP", symbol: "£", name: "British Pound" },
+  { code: "AED", symbol: "د.إ", name: "UAE Dirham" },
+  { code: "SGD", symbol: "S$", name: "Singapore Dollar" },
+  { code: "AUD", symbol: "A$", name: "Australian Dollar" },
+  { code: "CAD", symbol: "C$", name: "Canadian Dollar" },
+  { code: "JPY", symbol: "¥", name: "Japanese Yen" },
+  { code: "CHF", symbol: "CHF", name: "Swiss Franc" },
+  { code: "MYR", symbol: "RM", name: "Malaysian Ringgit" },
+  { code: "THB", symbol: "฿", name: "Thai Baht" },
+  { code: "HKD", symbol: "HK$", name: "Hong Kong Dollar" },
+];
+
+const GROUP_CATEGORIES = [
+  { value: "home", label: "Home", icon: "home" },
+  { value: "trip", label: "Trip", icon: "map" },
+  { value: "food", label: "Food", icon: "coffee" },
+  { value: "couple", label: "Couple", icon: "heart" },
+  { value: "work", label: "Work", icon: "briefcase" },
+  { value: "other", label: "Other", icon: "users" },
+];
 
 export default function CreateGroupScreen() {
   const colors = useColors();
@@ -31,15 +54,17 @@ export default function CreateGroupScreen() {
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState<GroupCategory>("other");
-  const [currency, setCurrency] = useState("USD");
+  const [category, setCategory] = useState("other");
+  const [currency, setCurrency] = useState("INR");
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [showCurrencies, setShowCurrencies] = useState(false);
 
+  const topPt = Platform.OS === "web" ? 67 : insets.top;
+
   const toggleMember = (uid: string) => {
-    setSelectedMembers(prev =>
-      prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid]
+    setSelectedMembers((prev) =>
+      prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid]
     );
   };
 
@@ -57,64 +82,86 @@ export default function CreateGroupScreen() {
         currency,
         memberIds: selectedMembers,
       });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace(`/group/${group.id}` as any);
-    } catch (e) {
-      Alert.alert("Error", "Failed to create group. Please try again.");
+      router.replace(`/group/${group.id}`);
+    } catch (e: any) {
+      Alert.alert("Error", e.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const selectedCurrency = CURRENCIES.find(c => c.code === currency);
-  const topPt = insets.top + (Platform.OS === "web" ? 67 : 0);
+  const selectedCurrency = CURRENCIES.find((c) => c.code === currency);
 
   return (
-    <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-      <View style={[styles.navBar, { paddingTop: topPt + 12, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7}>
-          <Feather name="x" size={22} color={colors.foreground} />
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <View style={[styles.header, { paddingTop: topPt + 16, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Feather name="x" size={22} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.navTitle, { color: colors.foreground }]}>New Group</Text>
-        <Button label="Create" onPress={handleCreate} loading={loading} size="sm" />
+        <Text style={[styles.headerTitle, { color: colors.text }]}>New Group</Text>
+        <TouchableOpacity onPress={handleCreate} disabled={loading}>
+          {loading ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <Text style={[styles.createBtn, { color: colors.primary }]}>Create</Text>
+          )}
+        </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Input
-          label="Group Name"
-          placeholder="Roommates, Trip to Bali, etc."
-          value={name}
-          onChangeText={setName}
-          autoFocus
-        />
-
-        <Input
-          label="Description (optional)"
-          placeholder="What's this group for?"
-          value={description}
-          onChangeText={setDescription}
-          multiline
-          numberOfLines={2}
-        />
-
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Name */}
         <View style={styles.section}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Category</Text>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>GROUP NAME *</Text>
+          <View style={[styles.inputRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <TextInput
+              style={[styles.input, { color: colors.text }]}
+              placeholder="e.g. Goa Trip 2025"
+              placeholderTextColor={colors.mutedForeground}
+              value={name}
+              onChangeText={setName}
+              autoFocus
+            />
+          </View>
+        </View>
+
+        {/* Description */}
+        <View style={styles.section}>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>DESCRIPTION (OPTIONAL)</Text>
+          <View style={[styles.inputRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <TextInput
+              style={[styles.input, { color: colors.text }]}
+              placeholder="What's this group for?"
+              placeholderTextColor={colors.mutedForeground}
+              value={description}
+              onChangeText={setDescription}
+            />
+          </View>
+        </View>
+
+        {/* Category */}
+        <View style={styles.section}>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>CATEGORY</Text>
           <View style={styles.categoryGrid}>
-            {GROUP_CATEGORIES.map(cat => (
+            {GROUP_CATEGORIES.map((cat) => (
               <TouchableOpacity
                 key={cat.value}
                 style={[
-                  styles.categoryChip,
+                  styles.categoryBtn,
                   {
-                    backgroundColor: category === cat.value ? colors.primary : colors.muted,
+                    backgroundColor: category === cat.value ? colors.primary : colors.card,
                     borderColor: category === cat.value ? colors.primary : colors.border,
                   },
                 ]}
-                onPress={() => { Haptics.selectionAsync(); setCategory(cat.value); }}
-                activeOpacity={0.7}
+                onPress={() => setCategory(cat.value)}
               >
-                <Feather name={cat.icon as any} size={16} color={category === cat.value ? colors.primaryForeground : colors.mutedForeground} />
-                <Text style={[styles.categoryText, { color: category === cat.value ? colors.primaryForeground : colors.mutedForeground }]}>
+                <Feather name={cat.icon as any} size={18} color={category === cat.value ? "#fff" : colors.mutedForeground} />
+                <Text style={[styles.categoryLabel, { color: category === cat.value ? "#fff" : colors.text }]}>
                   {cat.label}
                 </Text>
               </TouchableOpacity>
@@ -122,30 +169,29 @@ export default function CreateGroupScreen() {
           </View>
         </View>
 
+        {/* Currency */}
         <View style={styles.section}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Default Currency</Text>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>CURRENCY</Text>
           <TouchableOpacity
-            style={[styles.currencyPicker, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={[styles.currencyRow, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => setShowCurrencies(!showCurrencies)}
-            activeOpacity={0.7}
           >
-            <Text style={[styles.currencyText, { color: colors.foreground }]}>
-              {selectedCurrency?.symbol} {selectedCurrency?.code} — {selectedCurrency?.name}
+            <Text style={[styles.currencySymbol, { color: colors.primary }]}>{selectedCurrency?.symbol}</Text>
+            <Text style={[styles.currencyText, { color: colors.text }]}>
+              {selectedCurrency?.code} — {selectedCurrency?.name}
             </Text>
             <Feather name={showCurrencies ? "chevron-up" : "chevron-down"} size={18} color={colors.mutedForeground} />
           </TouchableOpacity>
           {showCurrencies && (
             <View style={[styles.currencyList, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              {CURRENCIES.map(c => (
+              {CURRENCIES.map((c) => (
                 <TouchableOpacity
                   key={c.code}
-                  style={[styles.currencyItem, { borderBottomColor: colors.border }]}
+                  style={[styles.currencyOption, { borderBottomColor: colors.border }]}
                   onPress={() => { setCurrency(c.code); setShowCurrencies(false); }}
-                  activeOpacity={0.7}
                 >
-                  <Text style={[styles.currencySymbol, { color: colors.primary }]}>{c.symbol}</Text>
-                  <Text style={[styles.currencyCode, { color: colors.foreground }]}>{c.code}</Text>
-                  <Text style={[styles.currencyName, { color: colors.mutedForeground }]}>{c.name}</Text>
+                  <Text style={[styles.currencyOptionCode, { color: colors.primary }]}>{c.symbol}</Text>
+                  <Text style={[styles.currencyOptionName, { color: colors.text }]}>{c.code} — {c.name}</Text>
                   {currency === c.code && <Feather name="check" size={16} color={colors.primary} />}
                 </TouchableOpacity>
               ))}
@@ -153,40 +199,47 @@ export default function CreateGroupScreen() {
           )}
         </View>
 
-        <View style={styles.section}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Add Members</Text>
-          {friends.length === 0 ? (
-            <View style={[styles.noFriends, { backgroundColor: colors.muted, borderRadius: 12 }]}>
-              <Text style={[styles.noFriendsText, { color: colors.mutedForeground }]}>
-                Add friends first from the Friends tab to include them in groups
-              </Text>
+        {/* Members */}
+        {friends.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>
+              ADD FRIENDS ({selectedMembers.length} selected)
+            </Text>
+            <View style={[styles.membersCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              {friends.map((f) => (
+                <TouchableOpacity
+                  key={f.id}
+                  style={[styles.memberRow, { borderBottomColor: colors.border }]}
+                  onPress={() => toggleMember(f.id)}
+                >
+                  <Avatar name={f.name} size={36} />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={[styles.memberName, { color: colors.text }]}>{f.name}</Text>
+                    <Text style={[styles.memberEmail, { color: colors.mutedForeground }]}>{f.email}</Text>
+                  </View>
+                  <View style={[
+                    styles.checkbox,
+                    {
+                      backgroundColor: selectedMembers.includes(f.id) ? colors.primary : "transparent",
+                      borderColor: selectedMembers.includes(f.id) ? colors.primary : colors.border,
+                    }
+                  ]}>
+                    {selectedMembers.includes(f.id) && <Feather name="check" size={12} color="#fff" />}
+                  </View>
+                </TouchableOpacity>
+              ))}
             </View>
-          ) : (
-            friends.map(f => (
-              <TouchableOpacity
-                key={f.id}
-                style={[styles.memberRow, { borderBottomColor: colors.border }]}
-                onPress={() => toggleMember(f.id)}
-                activeOpacity={0.7}
-              >
-                <Avatar name={f.name} size={40} />
-                <View style={styles.memberInfo}>
-                  <Text style={[styles.memberName, { color: colors.foreground }]}>{f.name}</Text>
-                  <Text style={[styles.memberPhone, { color: colors.mutedForeground }]}>{f.phone}</Text>
-                </View>
-                <View style={[
-                  styles.checkbox,
-                  {
-                    backgroundColor: selectedMembers.includes(f.id) ? colors.primary : "transparent",
-                    borderColor: selectedMembers.includes(f.id) ? colors.primary : colors.border,
-                  }
-                ]}>
-                  {selectedMembers.includes(f.id) && <Feather name="check" size={14} color="#fff" />}
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
-        </View>
+          </View>
+        )}
+
+        {friends.length === 0 && (
+          <View style={[styles.noFriendsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Feather name="user-plus" size={20} color={colors.mutedForeground} />
+            <Text style={[styles.noFriendsText, { color: colors.mutedForeground }]}>
+              Add friends from the Friends tab to include them in groups
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -194,119 +247,29 @@ export default function CreateGroupScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  navBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-  },
-  navTitle: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 16,
-  },
-  scroll: {
-    padding: 16,
-    gap: 20,
-  },
-  section: { gap: 10 },
-  label: {
-    fontFamily: "Inter_500Medium",
-    fontSize: 13,
-  },
-  categoryGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  categoryChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1.5,
-  },
-  categoryText: {
-    fontFamily: "Inter_500Medium",
-    fontSize: 13,
-  },
-  currencyPicker: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-  },
-  currencyText: {
-    fontFamily: "Inter_500Medium",
-    fontSize: 14,
-  },
-  currencyList: {
-    borderRadius: 12,
-    borderWidth: 1,
-    overflow: "hidden",
-    maxHeight: 200,
-  },
-  currencyItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 10,
-  },
-  currencySymbol: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 14,
-    width: 24,
-  },
-  currencyCode: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 13,
-    width: 36,
-  },
-  currencyName: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 13,
-    flex: 1,
-  },
-  noFriends: {
-    padding: 16,
-    alignItems: "center",
-  },
-  noFriendsText: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 13,
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  memberRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 12,
-  },
-  memberInfo: { flex: 1, gap: 2 },
-  memberName: {
-    fontFamily: "Inter_500Medium",
-    fontSize: 14,
-  },
-  memberPhone: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 12,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  createBtn: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  content: { padding: 20, gap: 20 },
+  section: { gap: 8 },
+  label: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.8 },
+  inputRow: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, height: 50, justifyContent: "center" },
+  input: { fontSize: 15, fontFamily: "Inter_400Regular" },
+  categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  categoryBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
+  categoryLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  currencyRow: { flexDirection: "row", alignItems: "center", borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, height: 50, gap: 10 },
+  currencySymbol: { fontSize: 16, fontFamily: "Inter_700Bold", width: 28 },
+  currencyText: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular" },
+  currencyList: { borderRadius: 12, borderWidth: 1, overflow: "hidden" },
+  currencyOption: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, gap: 10 },
+  currencyOptionCode: { fontSize: 14, fontFamily: "Inter_700Bold", width: 28 },
+  currencyOptionName: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular" },
+  membersCard: { borderRadius: 12, borderWidth: 1, overflow: "hidden" },
+  memberRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  memberName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  memberEmail: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  checkbox: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  noFriendsCard: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 12, borderWidth: 1, padding: 14 },
+  noFriendsText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular" },
 });

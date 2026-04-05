@@ -1,49 +1,64 @@
 import { Feather } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useColors } from "@/hooks/useColors";
-import { useAuth } from "@/context/AuthContext";
-import { useData } from "@/context/DataContext";
-import Input from "@/components/Input";
-import Button from "@/components/Button";
 import Avatar from "@/components/Avatar";
-import { CURRENCIES } from "@/types";
+import { useAuth } from "@/context/AuthContext";
+import { Group, useData } from "@/context/DataContext";
+import { useColors } from "@/hooks/useColors";
+
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: "$", EUR: "€", GBP: "£", INR: "₹", JPY: "¥", AUD: "A$",
+  CAD: "C$", SGD: "S$", AED: "د.إ", CHF: "CHF", MYR: "RM",
+  THB: "฿", HKD: "HK$", NZD: "NZ$", BRL: "R$",
+};
 
 export default function SettleScreen() {
-  const { groupId, from, to, amount: amountParam } = useLocalSearchParams<{ groupId: string; from: string; to: string; amount: string }>();
+  const { groupId, fromId, toId, amount: amountParam } = useLocalSearchParams<{
+    groupId: string; fromId: string; toId: string; amount: string;
+  }>();
   const colors = useColors();
   const { user } = useAuth();
-  const { groups, friends, addSettlement } = useData();
+  const { loadGroup, addSettlement } = useData();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const group = groups.find(g => g.id === groupId);
+  const [group, setGroup] = useState<Group | null>(null);
+  const [loadingGroup, setLoadingGroup] = useState(true);
   const [amountStr, setAmountStr] = useState(amountParam || "");
   const [note, setNote] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const fromUserId = from || user?.id || "";
-  const toUserId = to || "";
+  const fetchGroup = useCallback(async () => {
+    if (!groupId) return;
+    const g = await loadGroup(groupId);
+    if (g) setGroup(g);
+    setLoadingGroup(false);
+  }, [groupId, loadGroup]);
 
-  const allUsers = [user, ...friends].filter(Boolean) as any[];
-  const fromUser = group?.members.find(m => m.userId === fromUserId)?.user || allUsers.find(u => u.id === fromUserId);
-  const toUser = group?.members.find(m => m.userId === toUserId)?.user || allUsers.find(u => u.id === toUserId);
+  useEffect(() => { fetchGroup(); }, [fetchGroup]);
 
-  const currency = CURRENCIES.find(c => c.code === group?.currency);
-  const symbol = currency?.symbol || "$";
+  const fromUserId = fromId || user?.id || "";
+  const toUserId = toId || "";
+
+  const fromMember = group?.group_members?.find((m) => m.user_id === fromUserId);
+  const toMember = group?.group_members?.find((m) => m.user_id === toUserId);
+  const symbol = CURRENCY_SYMBOLS[group?.currency || "USD"] || "$";
+
+  const topPt = Platform.OS === "web" ? 67 : insets.top;
 
   const handleSettle = async () => {
     const amount = parseFloat(amountStr);
@@ -51,44 +66,54 @@ export default function SettleScreen() {
       Alert.alert("Error", "Please enter a valid amount");
       return;
     }
-    setLoading(true);
+    setSaving(true);
     try {
       await addSettlement({
-        groupId,
-        fromUserId,
+        groupId: groupId || undefined,
         toUserId,
         amount,
         currency: group?.currency || "USD",
         note: note.trim() || undefined,
-        isSettled: true,
       });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
-    } catch {
-      Alert.alert("Error", "Failed to record settlement");
+    } catch (e: any) {
+      Alert.alert("Error", e.message || "Failed to record settlement");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  const topPt = insets.top + (Platform.OS === "web" ? 67 : 0);
+  if (loadingGroup) {
+    return (
+      <View style={[styles.centered, { backgroundColor: colors.background }]}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
-    <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-      <View style={[styles.navBar, { paddingTop: topPt + 12, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7}>
-          <Feather name="arrow-left" size={22} color={colors.foreground} />
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <View style={[styles.navBar, { paddingTop: topPt + 12, borderBottomColor: colors.border, backgroundColor: colors.card }]}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Feather name="arrow-left" size={22} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.navTitle, { color: colors.foreground }]}>Settle Up</Text>
+        <Text style={[styles.navTitle, { color: colors.text }]}>Settle Up</Text>
         <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 40 }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Payment flow */}
         <View style={[styles.paymentFlow, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.userBlock}>
-            <Avatar name={fromUser?.name || "?"} size={56} />
-            <Text style={[styles.userName, { color: colors.foreground }]}>
-              {fromUserId === user?.id ? "You" : fromUser?.name || "?"}
+            <Avatar name={fromMember?.user?.name || "?"} size={56} />
+            <Text style={[styles.userName, { color: colors.text }]}>
+              {fromUserId === user?.id ? "You" : fromMember?.user?.name || "?"}
             </Text>
             <Text style={[styles.userRole, { color: colors.mutedForeground }]}>Pays</Text>
           </View>
@@ -97,40 +122,59 @@ export default function SettleScreen() {
             <Feather name="arrow-right" size={20} color={colors.primary} />
           </View>
           <View style={styles.userBlock}>
-            <Avatar name={toUser?.name || "?"} size={56} />
-            <Text style={[styles.userName, { color: colors.foreground }]}>
-              {toUserId === user?.id ? "You" : toUser?.name || "?"}
+            <Avatar name={toMember?.user?.name || "?"} size={56} />
+            <Text style={[styles.userName, { color: colors.text }]}>
+              {toUserId === user?.id ? "You" : toMember?.user?.name || "?"}
             </Text>
             <Text style={[styles.userRole, { color: colors.mutedForeground }]}>Receives</Text>
           </View>
         </View>
 
-        <Input
-          label={`Amount (${symbol})`}
-          placeholder="0.00"
-          keyboardType="decimal-pad"
-          value={amountStr}
-          onChangeText={setAmountStr}
-          prefix={symbol}
-        />
+        {/* Amount */}
+        <View>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>AMOUNT</Text>
+          <View style={[styles.inputRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.currencySymbol, { color: colors.primary }]}>{symbol}</Text>
+            <TextInput
+              style={[styles.input, { color: colors.text }]}
+              placeholder="0.00"
+              placeholderTextColor={colors.mutedForeground}
+              keyboardType="decimal-pad"
+              value={amountStr}
+              onChangeText={setAmountStr}
+              autoFocus
+            />
+          </View>
+        </View>
 
-        <Input
-          label="Note (optional)"
-          placeholder="Cash, bank transfer, etc."
-          value={note}
-          onChangeText={setNote}
-        />
+        {/* Note */}
+        <View>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>NOTE (OPTIONAL)</Text>
+          <View style={[styles.inputRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <TextInput
+              style={[styles.input, { color: colors.text }]}
+              placeholder="Cash, bank transfer, UPI..."
+              placeholderTextColor={colors.mutedForeground}
+              value={note}
+              onChangeText={setNote}
+            />
+          </View>
+        </View>
 
-        <Button
-          label="Confirm Settlement"
+        <TouchableOpacity
+          style={[styles.confirmBtn, { backgroundColor: colors.primary }]}
           onPress={handleSettle}
-          loading={loading}
-          fullWidth
-          size="lg"
-        />
+          disabled={saving}
+        >
+          {saving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.confirmBtnText}>Confirm Settlement</Text>
+          )}
+        </TouchableOpacity>
 
         <Text style={[styles.disclaimer, { color: colors.mutedForeground }]}>
-          This records the payment and updates balances in the group.
+          This records the payment and updates balances for the group.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -139,56 +183,21 @@ export default function SettleScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  navBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-  },
-  navTitle: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 16,
-  },
-  scroll: {
-    padding: 16,
-    gap: 20,
-  },
-  paymentFlow: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 24,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  userBlock: {
-    flex: 1,
-    alignItems: "center",
-    gap: 6,
-  },
-  userName: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 14,
-    textAlign: "center",
-  },
-  userRole: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 12,
-  },
-  arrowBlock: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 4,
-  },
-  arrowLine: {
-    width: 20,
-    height: 2,
-  },
-  disclaimer: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 12,
-    textAlign: "center",
-    lineHeight: 18,
-  },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
+  navBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  navTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  scroll: { padding: 20, gap: 20 },
+  paymentFlow: { flexDirection: "row", alignItems: "center", padding: 24, borderRadius: 16, borderWidth: 1 },
+  userBlock: { flex: 1, alignItems: "center", gap: 6 },
+  userName: { fontSize: 14, fontFamily: "Inter_600SemiBold", textAlign: "center" },
+  userRole: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  arrowBlock: { flexDirection: "row", alignItems: "center", paddingHorizontal: 4 },
+  arrowLine: { width: 20, height: 2 },
+  label: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.8, marginBottom: 8 },
+  inputRow: { flexDirection: "row", alignItems: "center", borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, height: 50, gap: 8 },
+  currencySymbol: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
+  confirmBtn: { height: 52, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  confirmBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  disclaimer: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center" },
 });

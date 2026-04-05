@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "SplitEase",
+    "name": "Hisab Kitab",
     "slug": "splitwise-app",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "splitwise-app",
+    "scheme": "hisabkitab",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -14,9 +14,12 @@
       "backgroundColor": "#10b981"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.hisabkitab.app"
     },
-    "android": {},
+    "android": {
+      "package": "com.hisabkitab.app"
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },

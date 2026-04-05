@@ -1,74 +1,125 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Session, User as SupabaseUser } from "@supabase/supabase-js";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 
-import { User } from "@/types";
+import { supabase } from "@/lib/supabase";
+
+export interface AppUser {
+  id: string;
+  name: string;
+  email: string;
+  avatar_url?: string | null;
+}
 
 interface AuthContextType {
-  user: User | null;
+  session: Session | null;
+  user: AppUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (phone: string, name: string) => Promise<void>;
-  logout: () => Promise<void>;
-  updateProfile: (updates: Partial<User>) => Promise<void>;
+  signUp: (email: string, password: string, name: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
+  updateProfile: (updates: { name?: string }) => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const STORAGE_KEY = "splitease_user";
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const loadUserProfile = useCallback(async (supabaseUser: SupabaseUser) => {
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", supabaseUser.id)
+        .single();
+      if (data) {
+        setUser(data);
+      } else {
+        // Profile may not exist yet (trigger may be slow) — create it
+        const name = supabaseUser.user_metadata?.name || supabaseUser.email?.split("@")[0] || "User";
+        const { data: inserted } = await supabase
+          .from("users")
+          .upsert({ id: supabaseUser.id, name, email: supabaseUser.email! })
+          .select()
+          .single();
+        if (inserted) setUser(inserted);
+      }
+    } catch {}
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    const { data: { user: sbUser } } = await supabase.auth.getUser();
+    if (sbUser) await loadUserProfile(sbUser);
+  }, [loadUserProfile]);
+
   useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const data = await AsyncStorage.getItem(STORAGE_KEY);
-        if (data) {
-          setUser(JSON.parse(data));
-        }
-      } catch (e) {
-      } finally {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) {
+        loadUserProfile(session.user).finally(() => setIsLoading(false));
+      } else {
         setIsLoading(false);
       }
-    };
-    loadUser();
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setSession(session);
+      if (session?.user) {
+        await loadUserProfile(session.user);
+      } else {
+        setUser(null);
+      }
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [loadUserProfile]);
+
+  const signUp = useCallback(async (email: string, password: string, name: string) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { name } },
+    });
+    if (error) throw error;
+    if (!data.user) throw new Error("Sign up failed — please try again.");
+    // Upsert profile in case trigger is slow
+    await supabase.from("users").upsert({ id: data.user.id, name, email }).select().single();
   }, []);
 
-  const login = useCallback(async (phone: string, name: string) => {
-    const newUser: User = {
-      id: "user_" + Date.now().toString() + Math.random().toString(36).substr(2, 9),
-      name,
-      phone,
-      isCurrentUser: true,
-    };
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
-    setUser(newUser);
+  const signIn = useCallback(async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
   }, []);
 
-  const logout = useCallback(async () => {
-    await AsyncStorage.removeItem(STORAGE_KEY);
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
     setUser(null);
+    setSession(null);
   }, []);
 
-  const updateProfile = useCallback(async (updates: Partial<User>) => {
+  const updateProfile = useCallback(async (updates: { name?: string }) => {
     if (!user) return;
-    const updated = { ...user, ...updates };
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    setUser(updated);
+    const { data, error } = await supabase
+      .from("users")
+      .update(updates)
+      .eq("id", user.id)
+      .select()
+      .single();
+    if (error) throw error;
+    if (data) setUser(data);
   }, [user]);
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading,
-        isAuthenticated: !!user,
-        login,
-        logout,
-        updateProfile,
-      }}
-    >
+    <AuthContext.Provider value={{
+      session, user, isLoading,
+      isAuthenticated: !!session && !!user,
+      signUp, signIn, signOut, updateProfile, refreshUser,
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,8 +1,7 @@
 import { Feather } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Platform,
@@ -12,282 +11,241 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import Animated, { FadeInRight } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useColors } from "@/hooks/useColors";
-import { useAuth } from "@/context/AuthContext";
-import { useData } from "@/context/DataContext";
 import Avatar from "@/components/Avatar";
 import EmptyState from "@/components/EmptyState";
-import { User } from "@/types";
+import { useAuth } from "@/context/AuthContext";
+import { UserProfile, useData } from "@/context/DataContext";
+import { useColors } from "@/hooks/useColors";
 
 export default function FriendsTab() {
   const colors = useColors();
   const { user } = useAuth();
-  const { friends, groups, getFriendBalance, addFriend } = useData();
-  const router = useRouter();
+  const { friends, pendingRequests, searchUsers, sendFriendRequest, respondToRequest, loadFriends } = useData();
   const insets = useSafeAreaInsets();
-  const [search, setSearch] = useState("");
-  const [showAdd, setShowAdd] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newPhone, setNewPhone] = useState("");
 
-  const filtered = friends.filter(f =>
+  const [search, setSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [tab, setTab] = useState<"friends" | "requests">("friends");
+
+  const topPt = Platform.OS === "web" ? 67 : insets.top;
+
+  const filteredFriends = friends.filter((f) =>
     f.name.toLowerCase().includes(search.toLowerCase()) ||
-    f.phone.includes(search)
+    f.email.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleAddFriend = async () => {
-    if (!newName.trim() || !newPhone.trim()) {
-      Alert.alert("Missing info", "Please enter name and phone");
-      return;
+  const handleSearch = async () => {
+    if (!search.trim() || search.length < 3) return;
+    setSearching(true);
+    try {
+      const results = await searchUsers(search.trim());
+      // Filter out self and existing friends
+      const filtered = results.filter(
+        (r) => r.id !== user?.id && !friends.find((f) => f.id === r.id)
+      );
+      setSearchResults(filtered);
+    } catch (e: any) {
+      Alert.alert("Error", e.message);
+    } finally {
+      setSearching(false);
     }
-    const newUser: User = {
-      id: "user_" + Date.now().toString() + Math.random().toString(36).substr(2, 9),
-      name: newName.trim(),
-      phone: newPhone.trim(),
-    };
-    await addFriend(newUser);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setNewName("");
-    setNewPhone("");
-    setShowAdd(false);
   };
 
-  const getFriendGroups = (friendId: string) =>
-    groups.filter(g => g.members.some(m => m.userId === friendId) && g.members.some(m => m.userId === user?.id));
+  const handleSendRequest = async (addressee: UserProfile) => {
+    try {
+      await sendFriendRequest(addressee.id);
+      Alert.alert("Request sent", `Friend request sent to ${addressee.name}`);
+      setSearchResults([]);
+      setSearch("");
+      setShowSearch(false);
+    } catch (e: any) {
+      Alert.alert("Error", e.message);
+    }
+  };
 
-  const topPt = insets.top + (Platform.OS === "web" ? 67 : 0);
+  const handleRespond = async (requestId: string, status: "accepted" | "rejected") => {
+    try {
+      await respondToRequest(requestId, status);
+    } catch (e: any) {
+      Alert.alert("Error", e.message);
+    }
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPt + 16, backgroundColor: colors.background }]}>
-        <View style={styles.headerRow}>
-          <Text style={[styles.title, { color: colors.foreground }]}>Friends</Text>
+        <View style={styles.titleRow}>
+          <Text style={[styles.title, { color: colors.text }]}>Friends</Text>
           <TouchableOpacity
             style={[styles.addBtn, { backgroundColor: colors.primary }]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowAdd(!showAdd); }}
-            activeOpacity={0.8}
+            onPress={() => { setShowSearch(!showSearch); setSearchResults([]); }}
           >
-            <Feather name={showAdd ? "x" : "user-plus"} size={18} color="#fff" />
+            <Feather name={showSearch ? "x" : "user-plus"} size={20} color="#fff" />
           </TouchableOpacity>
         </View>
 
-        {showAdd && (
-          <Animated.View
-            entering={FadeInRight.duration(300)}
-            style={[styles.addCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-          >
-            <Text style={[styles.addTitle, { color: colors.foreground }]}>Add Friend</Text>
+        {showSearch && (
+          <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Feather name="search" size={16} color={colors.mutedForeground} />
             <TextInput
-              style={[styles.addInput, { backgroundColor: colors.muted, color: colors.foreground }]}
-              placeholder="Full name"
+              style={[styles.searchInput, { color: colors.text }]}
+              placeholder="Search by email..."
               placeholderTextColor={colors.mutedForeground}
-              value={newName}
-              onChangeText={setNewName}
-              autoCapitalize="words"
+              value={search}
+              onChangeText={setSearch}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              returnKeyType="search"
+              onSubmitEditing={handleSearch}
+              autoFocus
             />
-            <TextInput
-              style={[styles.addInput, { backgroundColor: colors.muted, color: colors.foreground }]}
-              placeholder="Phone number"
-              placeholderTextColor={colors.mutedForeground}
-              value={newPhone}
-              onChangeText={setNewPhone}
-              keyboardType="phone-pad"
-            />
-            <TouchableOpacity
-              style={[styles.addFriendBtn, { backgroundColor: colors.primary }]}
-              onPress={handleAddFriend}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.addFriendBtnText, { color: colors.primaryForeground }]}>Add Friend</Text>
-            </TouchableOpacity>
-          </Animated.View>
+            {searching ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <TouchableOpacity onPress={handleSearch}>
+                <Text style={[styles.searchBtn, { color: colors.primary }]}>Search</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
 
-        <View style={[styles.searchBar, { backgroundColor: colors.muted }]}>
-          <Feather name="search" size={16} color={colors.mutedForeground} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.foreground }]}
-            placeholder="Search friends..."
-            placeholderTextColor={colors.mutedForeground}
-            value={search}
-            onChangeText={setSearch}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch("")}>
-              <Feather name="x" size={14} color={colors.mutedForeground} />
+        {showSearch && searchResults.length > 0 && (
+          <View style={[styles.resultsBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {searchResults.map((r) => (
+              <View key={r.id} style={styles.resultRow}>
+                <Avatar name={r.name} size={36} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={[styles.resultName, { color: colors.text }]}>{r.name}</Text>
+                  <Text style={[styles.resultEmail, { color: colors.mutedForeground }]}>{r.email}</Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.requestBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => handleSendRequest(r)}
+                >
+                  <Text style={styles.requestBtnText}>Add</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {pendingRequests.length > 0 && (
+          <View style={[styles.tabRow, { borderColor: colors.border }]}>
+            <TouchableOpacity
+              style={[styles.tabBtn, tab === "friends" && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
+              onPress={() => setTab("friends")}
+            >
+              <Text style={[styles.tabText, { color: tab === "friends" ? colors.primary : colors.mutedForeground }]}>
+                Friends ({friends.length})
+              </Text>
             </TouchableOpacity>
-          )}
-        </View>
+            <TouchableOpacity
+              style={[styles.tabBtn, tab === "requests" && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
+              onPress={() => setTab("requests")}
+            >
+              <Text style={[styles.tabText, { color: tab === "requests" ? colors.primary : colors.mutedForeground }]}>
+                Requests ({pendingRequests.length})
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
-      <FlatList
-        data={filtered}
-        keyExtractor={item => item.id}
-        renderItem={({ item, index }) => {
-          const balance = getFriendBalance(item.id);
-          const sharedGroups = getFriendGroups(item.id);
-          const isOwed = balance > 0.01;
-          const isOwe = balance < -0.01;
-          const balanceColor = isOwed ? colors.owed : isOwe ? colors.owe : colors.mutedForeground;
-
-          return (
-            <Animated.View entering={FadeInRight.delay(index * 40).duration(300)}>
-              <TouchableOpacity
-                style={[styles.friendCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                activeOpacity={0.7}
-              >
-                <Avatar name={item.name} size={48} />
-                <View style={styles.friendInfo}>
-                  <Text style={[styles.friendName, { color: colors.foreground }]}>{item.name}</Text>
-                  <Text style={[styles.friendPhone, { color: colors.mutedForeground }]}>{item.phone}</Text>
-                  {sharedGroups.length > 0 && (
-                    <Text style={[styles.sharedGroups, { color: colors.mutedForeground }]}>
-                      {sharedGroups.length} shared group{sharedGroups.length !== 1 ? "s" : ""}
-                    </Text>
-                  )}
+      {tab === "requests" ? (
+        <FlatList
+          data={pendingRequests}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 100 }]}
+          ListEmptyComponent={<EmptyState icon="inbox" title="No pending requests" description="" />}
+          renderItem={({ item }) => {
+            const requester = item.requester as UserProfile;
+            return (
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Avatar name={requester?.name || "?"} size={42} />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={[styles.cardName, { color: colors.text }]}>{requester?.name}</Text>
+                  <Text style={[styles.cardEmail, { color: colors.mutedForeground }]}>{requester?.email}</Text>
                 </View>
-                <View style={styles.balanceWrap}>
-                  {Math.abs(balance) > 0.01 ? (
-                    <>
-                      <Text style={[styles.balanceLabel, { color: balanceColor }]}>
-                        {isOwed ? "owes you" : "you owe"}
-                      </Text>
-                      <Text style={[styles.balanceAmount, { color: balanceColor }]}>
-                        ${Math.abs(balance).toFixed(2)}
-                      </Text>
-                    </>
-                  ) : (
-                    <Text style={[styles.balanceLabel, { color: colors.mutedForeground }]}>Settled</Text>
-                  )}
+                <View style={styles.respondBtns}>
+                  <TouchableOpacity
+                    style={[styles.respondBtn, { backgroundColor: colors.primary }]}
+                    onPress={() => handleRespond(item.id, "accepted")}
+                  >
+                    <Feather name="check" size={16} color="#fff" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.respondBtn, { backgroundColor: colors.destructive + "20" }]}
+                    onPress={() => handleRespond(item.id, "rejected")}
+                  >
+                    <Feather name="x" size={16} color={colors.destructive} />
+                  </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
-            </Animated.View>
-          );
-        }}
-        contentContainerStyle={[
-          styles.list,
-          { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 90 }
-        ]}
-        ListEmptyComponent={
-          <EmptyState
-            icon="user"
-            title="No friends yet"
-            subtitle="Add friends to split expenses with them"
-            actionLabel="Add Friend"
-            onAction={() => setShowAdd(true)}
-          />
-        }
-        scrollEnabled={filtered.length > 0}
-      />
+              </View>
+            );
+          }}
+        />
+      ) : (
+        <FlatList
+          data={filteredFriends}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 100 }]}
+          ListEmptyComponent={
+            !showSearch ? (
+              <EmptyState
+                icon="users"
+                title="No friends yet"
+                description="Search by email to add friends and split expenses together"
+                action={{ label: "Add Friend", onPress: () => setShowSearch(true) }}
+              />
+            ) : null
+          }
+          renderItem={({ item }) => (
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Avatar name={item.name} size={42} />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.cardName, { color: colors.text }]}>{item.name}</Text>
+                <Text style={[styles.cardEmail, { color: colors.mutedForeground }]}>{item.email}</Text>
+              </View>
+              <View style={[styles.friendBadge, { backgroundColor: colors.success + "20" }]}>
+                <Feather name="check" size={12} color={colors.success} />
+                <Text style={[styles.friendBadgeText, { color: colors.success }]}>Friend</Text>
+              </View>
+            </View>
+          )}
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    gap: 12,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  title: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 28,
-    letterSpacing: -0.5,
-  },
-  addBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  addCard: {
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    gap: 10,
-  },
-  addTitle: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 15,
-  },
-  addInput: {
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontFamily: "Inter_400Regular",
-    fontSize: 14,
-  },
-  addFriendBtn: {
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  addFriendBtnText: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 14,
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontFamily: "Inter_400Regular",
-    fontSize: 14,
-  },
-  list: {
-    padding: 16,
-    gap: 8,
-  },
-  friendCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-    borderRadius: 16,
-    marginBottom: 8,
-    borderWidth: 1,
-    gap: 12,
-  },
-  friendInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  friendName: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 15,
-  },
-  friendPhone: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 12,
-  },
-  sharedGroups: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 11,
-  },
-  balanceWrap: {
-    alignItems: "flex-end",
-    gap: 2,
-  },
-  balanceLabel: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 11,
-  },
-  balanceAmount: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 15,
-  },
+  header: { paddingHorizontal: 20, paddingBottom: 8 },
+  titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 },
+  title: { fontSize: 26, fontFamily: "Inter_700Bold" },
+  addBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  searchBox: { flexDirection: "row", alignItems: "center", borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, height: 48, marginBottom: 8, gap: 8 },
+  searchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
+  searchBtn: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  resultsBox: { borderRadius: 12, borderWidth: 1, overflow: "hidden", marginBottom: 8 },
+  resultRow: { flexDirection: "row", alignItems: "center", padding: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  resultName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  resultEmail: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  requestBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8 },
+  requestBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  tabRow: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, marginBottom: 4 },
+  tabBtn: { flex: 1, alignItems: "center", paddingVertical: 10 },
+  tabText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  list: { padding: 16, gap: 10 },
+  card: { flexDirection: "row", alignItems: "center", borderRadius: 14, borderWidth: 1, padding: 14 },
+  cardName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  cardEmail: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  respondBtns: { flexDirection: "row", gap: 8 },
+  respondBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  friendBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  friendBadgeText: { fontSize: 12, fontFamily: "Inter_500Medium" },
 });
