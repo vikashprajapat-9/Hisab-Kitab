@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "FqQWQZJPwUQdRRi8wZOd4"
+uri = "file://artifacts/splitwise-app/assets/images/icon.png"
+type = "image"
+title = "splitease app icon"
