@@ -5,13 +5,15 @@ import { useColorScheme } from "react-native";
 import { ThemeMode } from "@/types";
 
 interface ThemeContextType {
+  theme: ThemeMode;
   themeMode: ThemeMode;
   isDark: boolean;
+  setTheme: (mode: ThemeMode) => Promise<void>;
   setThemeMode: (mode: ThemeMode) => Promise<void>;
 }
 
 const ThemeContext = createContext<ThemeContextType | null>(null);
-const STORAGE_KEY = "splitease_theme";
+const STORAGE_KEY = "hisabkitab_theme";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useColorScheme();
@@ -34,7 +36,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ themeMode, isDark, setThemeMode }}>
+    <ThemeContext.Provider value={{ theme: themeMode, themeMode, isDark, setTheme: setThemeMode, setThemeMode }}>
       {children}
     </ThemeContext.Provider>
   );

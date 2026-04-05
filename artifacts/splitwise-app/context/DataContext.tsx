@@ -104,6 +104,7 @@ interface DataContextType {
   error: string | null;
 
   loadGroups: () => Promise<void>;
+  loadActivities: () => Promise<void>;
   loadGroup: (groupId: string) => Promise<Group | null>;
   createGroup: (input: { name: string; description?: string; category: string; currency: string; memberIds: string[] }) => Promise<Group>;
   deleteGroup: (groupId: string) => Promise<void>;
@@ -319,7 +320,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   return (
     <DataContext.Provider value={{
       groups, activities, friends, pendingRequests, isLoading, error,
-      loadGroups, loadGroup, createGroup, deleteGroup,
+      loadGroups, loadActivities, loadGroup, createGroup, deleteGroup,
       loadGroupExpenses, addExpense, deleteExpense,
       loadGroupSettlements, addSettlement,
       loadFriends, searchUsers, sendFriendRequest, respondToRequest,

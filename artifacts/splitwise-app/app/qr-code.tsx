@@ -34,7 +34,7 @@ export default function QRCodeScreen() {
       <View style={styles.content}>
         <Text style={[styles.title, { color: colors.foreground }]}>Scan to add me</Text>
         <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-          Share this code with friends to connect on SplitEase
+          Share this code with friends to connect on Hisab Kitab
         </Text>
 
         <View style={[styles.qrContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -56,7 +56,7 @@ export default function QRCodeScreen() {
           </View>
           <Avatar name={user?.name || "?"} size={56} />
           <Text style={[styles.qrName, { color: colors.foreground }]}>{user?.name}</Text>
-          <Text style={[styles.qrPhone, { color: colors.mutedForeground }]}>{user?.phone}</Text>
+          <Text style={[styles.qrPhone, { color: colors.mutedForeground }]}>{user?.email}</Text>
         </View>
 
         <View style={styles.shareRow}>
