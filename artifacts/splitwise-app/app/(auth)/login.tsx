@@ -57,14 +57,24 @@ export default function LoginScreen() {
         await signUp(email.trim().toLowerCase(), password, name.trim());
         Alert.alert(
           "Account created!",
-          "Please check your email to confirm your account, then sign in.",
+          "Please check your email inbox and click the confirmation link, then come back to sign in.",
           [{ text: "OK", onPress: () => setMode("login") }]
         );
       } else {
         await signIn(email.trim().toLowerCase(), password);
       }
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Something went wrong. Please try again.");
+      const msg: string = e?.message ?? "";
+      if (msg.toLowerCase().includes("email not confirmed")) {
+        Alert.alert(
+          "Email not confirmed",
+          "Please check your inbox and click the confirmation link sent when you registered. Then try signing in again."
+        );
+      } else if (msg.toLowerCase().includes("invalid login credentials") || msg.toLowerCase().includes("invalid credentials")) {
+        Alert.alert("Incorrect details", "Email or password is incorrect. Please check and try again.");
+      } else {
+        Alert.alert("Sign in failed", msg || "Something went wrong. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }

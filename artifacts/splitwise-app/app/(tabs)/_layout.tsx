@@ -1,42 +1,16 @@
-import { BlurView } from "expo-blur";
-import { isLiquidGlassAvailable } from "expo-glass-effect";
-import { Tabs } from "expo-router";
-import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
-import { SymbolView } from "expo-symbols";
 import { Feather } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
+import { Tabs } from "expo-router";
 import React from "react";
-import { Platform, StyleSheet, View, useColorScheme } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
+import { useTheme } from "@/context/ThemeContext";
 
-function NativeTabLayout() {
-  return (
-    <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "person.2", selected: "person.2.fill" }} />
-        <Label>Groups</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="friends">
-        <Icon sf={{ default: "person.badge.clock", selected: "person.badge.clock.fill" }} />
-        <Label>Friends</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="activity">
-        <Icon sf={{ default: "clock", selected: "clock.fill" }} />
-        <Label>Activity</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="account">
-        <Icon sf={{ default: "person.circle", selected: "person.circle.fill" }} />
-        <Label>Account</Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
-  );
-}
-
-function ClassicTabLayout() {
+export default function TabLayout() {
   const colors = useColors();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
+  const { isDark } = useTheme();
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
   const safeAreaInsets = useSafeAreaInsets();
@@ -72,57 +46,30 @@ function ClassicTabLayout() {
         name="index"
         options={{
           title: "Groups",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="person.2" tintColor={color} size={24} />
-            ) : (
-              <Feather name="users" size={22} color={color} />
-            ),
+          tabBarIcon: ({ color }) => <Feather name="users" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="friends"
         options={{
           title: "Friends",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="person.badge.clock" tintColor={color} size={24} />
-            ) : (
-              <Feather name="user" size={22} color={color} />
-            ),
+          tabBarIcon: ({ color }) => <Feather name="user-plus" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="activity"
         options={{
           title: "Activity",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="clock" tintColor={color} size={24} />
-            ) : (
-              <Feather name="activity" size={22} color={color} />
-            ),
+          tabBarIcon: ({ color }) => <Feather name="activity" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="account"
         options={{
           title: "Account",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="person.circle" tintColor={color} size={24} />
-            ) : (
-              <Feather name="user" size={22} color={color} />
-            ),
+          tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} />,
         }}
       />
     </Tabs>
   );
-}
-
-export default function TabLayout() {
-  if (isLiquidGlassAvailable()) {
-    return <NativeTabLayout />;
-  }
-  return <ClassicTabLayout />;
 }
